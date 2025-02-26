@@ -520,14 +520,16 @@ int main(int argc, char** argv)
         {
             break;  // End of video
         }
+        cv::Mat resized;
+        cv::resize(frame, resized, cv::Size(1280, 768));
 
         std::vector<Object> objects;
         ncnn::Mat da_seg_mask, ll_seg_mask;
-        detect_yolopv2(frame, objects, da_seg_mask, ll_seg_mask);  // Apply the object detection
-        draw_objects(frame, objects, da_seg_mask, ll_seg_mask);  // Draw the objects on the frame
+        detect_yolopv2(resized, objects, da_seg_mask, ll_seg_mask);  // Apply the object detection
+        draw_objects(resized, objects, da_seg_mask, ll_seg_mask);  // Draw the objects on the frame
 
         // Write the processed frame to the output video
-        outputVideo.write(frame);
+        outputVideo.write(resized);
 
         // Calculate the time taken to process this frame
         auto end_time = std::chrono::high_resolution_clock::now();
