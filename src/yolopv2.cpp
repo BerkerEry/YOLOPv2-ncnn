@@ -1,6 +1,6 @@
 #include "layer.h"
 #include "net.h"
-
+#include "gpu.h"
 #if defined(USE_NCNN_SIMPLEOCV)
 #include "simpleocv.h"
 #else
@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <vector>
 #include <math.h>
+#include <opencv2/opencv.hpp>
+#include <chrono>
 #define MAX_STRIDE 64
 
 struct Object
@@ -56,6 +58,7 @@ static void slice(const ncnn::Mat& in, ncnn::Mat& out, int start, int end, int a
 static void interp(const ncnn::Mat& in, const float& scale, const int& out_w, const int& out_h, ncnn::Mat& out)
 {
     ncnn::Option opt;
+    opt.use_vulkan_compute = true;  // Enable Vulkan GPU acceleration
     opt.num_threads = 4;
     opt.use_fp16_storage = false;
     opt.use_packing_layout = false;
@@ -312,7 +315,7 @@ static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects,
     }
     cv::imwrite("result.jpg", image);
     cv::imshow("result", image);
-    cv::waitKey();
+    cv::waitKey(1);
 }
 
 static int detect_yolopv2( cv::Mat& bgr, std::vector<Object>& objects, ncnn::Mat& da_seg_mask_, ncnn::Mat&  ll_seg_mask_)
@@ -472,23 +475,68 @@ int main(int argc, char** argv)
 {
     if (argc != 2)
     {
-        fprintf(stderr, "Usage: %s [imagepath]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [video path]\n", argv[0]);
         return -1;
     }
 
-    const char* imagepath = argv[1];
+    const char* videoPath = argv[1];
 
-    cv::Mat m = cv::imread(imagepath, 1);
-    if (m.empty())
+    cv::VideoCapture capture(videoPath);
+    if (!capture.isOpened())
     {
-        fprintf(stderr, "cv::imread %s failed\n", imagepath);
+        fprintf(stderr, "Error opening video file %s\n", videoPath);
         return -1;
     }
-    
-    std::vector<Object> objects;
-    ncnn::Mat da_seg_mask, ll_seg_mask;
-    detect_yolopv2(m, objects, da_seg_mask, ll_seg_mask);
-    draw_objects(m, objects,da_seg_mask, ll_seg_mask);
+
+    // Get the frame rate of the input video
+    double fps = capture.get(cv::CAP_PROP_FPS);
+
+    // Print out the FPS to verify it
+    std::cout << "Input video FPS: " << fps << std::endl;
+
+    int frame_width = (int)capture.get(cv::CAP_PROP_FRAME_WIDTH);
+    int frame_height = (int)capture.get(cv::CAP_PROP_FRAME_HEIGHT);
+
+
+    // Print out the FPS to verify it
+    std::cout << "Input video FPS: " << fps << std::endl;
+
+    // Create a VideoWriter to write the output video
+    cv::VideoWriter outputVideo("output_video.mp4", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), fps, cv::Size(frame_width, frame_height));
+
+    if (!outputVideo.isOpened())
+    {
+        fprintf(stderr, "Error opening video writer\n");
+        return -1;
+    }
+
+    cv::Mat frame;
+    while (true)
+    {
+        auto start_time = std::chrono::high_resolution_clock::now();  // Start time for processing
+
+        capture >> frame;  // Read a frame from the input video
+        if (frame.empty())
+        {
+            break;  // End of video
+        }
+
+        std::vector<Object> objects;
+        ncnn::Mat da_seg_mask, ll_seg_mask;
+        detect_yolopv2(frame, objects, da_seg_mask, ll_seg_mask);  // Apply the object detection
+        draw_objects(frame, objects, da_seg_mask, ll_seg_mask);  // Draw the objects on the frame
+
+        // Write the processed frame to the output video
+        outputVideo.write(frame);
+
+        // Calculate the time taken to process this frame
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration = end_time - start_time;
+        std::cout << "Frame processing time: " << duration.count() << " seconds" << std::endl;
+    }
+
+    capture.release();
+    outputVideo.release();
 
     return 0;
 }

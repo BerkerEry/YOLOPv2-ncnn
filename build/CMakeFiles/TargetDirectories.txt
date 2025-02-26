@@ -1,0 +1,3 @@
+/home/berker/yolopv2_ncnn/YOLOPv2-ncnn/build/CMakeFiles/yolopv2_ncnn.dir
+/home/berker/yolopv2_ncnn/YOLOPv2-ncnn/build/CMakeFiles/edit_cache.dir
+/home/berker/yolopv2_ncnn/YOLOPv2-ncnn/build/CMakeFiles/rebuild_cache.dir
